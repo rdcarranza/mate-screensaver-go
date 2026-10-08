@@ -1,9 +1,7 @@
 #include <gtk/gtk.h>
 #include <cairo.h>
-
 #include <gdk/gdkx.h>
 #include <gdk/x11/gdkx11window.h>
-
 #include <X11/Xlib.h>
 
 #include <stdlib.h>
@@ -94,6 +92,7 @@ void screen_window_show(void *window)
     gdk_window_show(gdk_window);
 }
 
+/*
 static gboolean draw_screen_idle(gpointer data)
 {
     GdkWindow *gdk_window;
@@ -102,17 +101,69 @@ static gboolean draw_screen_idle(gpointer data)
     gdk_window = (GdkWindow *)data;
 
     cr = gdk_cairo_create(gdk_window);
-
+    
+    
     draw_screen(
         cr,
-        1600,
-        900
+        gdk_window_get_width(gdk_window) ,
+        gdk_window_get_height(gdk_window)
     );
 
     cairo_destroy(cr);
 
     return G_SOURCE_REMOVE;
 }
+*/
+
+static gboolean draw_screen_idle(gpointer data)
+{
+    GdkWindow *gdk_window;
+    GdkDrawingContext *drawing_context;
+    cairo_t *cr;
+    cairo_region_t *region;
+
+    gdk_window = (GdkWindow *)data;
+
+    region = cairo_region_create_rectangle(
+        &(GdkRectangle){
+            0,
+            0,
+            gdk_window_get_width(gdk_window),
+            gdk_window_get_height(gdk_window)
+        }
+    );
+
+    drawing_context = gdk_window_begin_draw_frame(
+        gdk_window,
+        region
+    );
+
+    if (drawing_context == NULL) {
+        cairo_region_destroy(region);
+
+        return G_SOURCE_REMOVE;
+    }
+
+    cr = gdk_drawing_context_get_cairo_context(
+        drawing_context
+    );
+
+    draw_screen(
+        cr,
+        gdk_window_get_width(gdk_window),
+        gdk_window_get_height(gdk_window)
+    );
+
+    gdk_window_end_draw_frame(
+        gdk_window,
+        drawing_context
+    );
+
+    cairo_region_destroy(region);
+
+    return G_SOURCE_REMOVE;
+}
+
 
 void screen_queue_draw(void *window)
 {

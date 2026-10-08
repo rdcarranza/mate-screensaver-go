@@ -468,6 +468,182 @@ Esto permite comprobar que el callback de renderizado está siendo ejecutado.
 
 ---
 
+
+
+## Integración con LightDM
+
+`mate-screensaver-go` puede integrarse con **LightDM** para mostrar el screensaver sobre la pantalla de login sin utilizar autologin.
+
+### Arquitectura
+
+```text
+LightDM
+   │
+   ▼
+greeter-wrapper
+   │
+   ├── lightdm-gtk-greeter
+   │
+   └── mate-screensaver-greeter
+          │
+          ├── detección de inactividad X11
+          ├── ventana fullscreen
+          ├── gestión del cursor
+          ├── control de DPMS
+          │
+          └── mate-screensaver-go
+```
+
+El proyecto se divide en dos componentes:
+
+```text
+cmd/
+├── screensaver/
+│   ├── main.go
+│   ├── renderer.go
+│   └── gtk.c
+│
+└── screensaver-greeter/
+    ├── main.go
+    ├── x11.c
+    └── install.sh
+```
+
+`mate-screensaver-go` es el renderer y muestra reloj, fecha, ubicación y clima utilizando GTK3, Cairo y X11.
+
+`mate-screensaver-greeter` se encarga de la integración con LightDM: detecta la inactividad, crea la ventana fullscreen, inicia el renderer, oculta el cursor y desactiva el blanking/DPMS.
+
+### Funcionamiento
+
+1. LightDM inicia `lightdm-gtk-greeter`.
+2. El wrapper inicia `mate-screensaver-greeter`.
+3. Después de **15 segundos de inactividad**, se crea una ventana fullscreen.
+4. Se oculta el cursor y se inicia `mate-screensaver-go`.
+5. Al detectar actividad de teclado, mouse o pantalla táctil, el renderer termina, se destruye la ventana y se restaura el cursor.
+6. Cuando LightDM finaliza el greeter, el wrapper también finaliza el proceso del screensaver.
+
+El display permanece encendido mediante el control directo de X11/DPMS.
+
+### Instalación
+
+El proyecto incluye un instalador automático:
+
+```bash
+chmod +x cmd/screensaver-greeter/install.sh
+sudo ./cmd/screensaver-greeter/install.sh
+```
+
+El instalador:
+
+- compila `mate-screensaver-go`;
+- compila `mate-screensaver-greeter`;
+- instala ambos binarios en `/usr/libexec/mate-screensaver/`;
+- instala el wrapper de LightDM;
+- instala la entrada `.desktop`;
+- configura `greeter-wrapper` en `/etc/lightdm/lightdm.conf`;
+- crea un backup de la configuración de LightDM;
+- verifica la configuración resultante.
+
+Para reiniciar LightDM automáticamente:
+
+```bash
+sudo ./cmd/screensaver-greeter/install.sh --restart
+```
+
+También puede reiniciarse manualmente:
+
+```bash
+sudo systemctl restart lightdm
+```
+
+> **Importante:** reiniciar LightDM finaliza la sesión gráfica actual. Se recomienda ejecutar este comando desde una TTY (`Ctrl + Alt + F3`) o mediante SSH.
+
+### Archivos instalados
+
+```text
+/usr/libexec/mate-screensaver/
+├── mate-screensaver-go
+└── mate-screensaver-greeter
+
+/usr/libexec/
+└── mate-screensaver-greeter-wrapper
+
+/usr/share/applications/
+└── mate-screensaver-go.desktop
+```
+
+La configuración de LightDM se mantiene en:
+
+```text
+/etc/lightdm/lightdm.conf
+```
+
+Antes de modificarla, el instalador crea automáticamente un backup:
+
+```text
+/etc/lightdm/lightdm.conf.backup-YYYYMMDD-HHMMSS
+```
+
+### Configuración
+
+El tiempo de inactividad está definido actualmente en `mate-screensaver-greeter`:
+
+```go
+const (
+    idleTimeout  = 15 * time.Second
+    pollInterval = 250 * time.Millisecond
+)
+```
+
+Por defecto:
+
+- **15 segundos** de inactividad para activar el screensaver.
+- **250 ms** entre comprobaciones de actividad.
+
+### Diagnóstico
+
+Verificar los procesos:
+
+```bash
+ps aux | grep -E '[l]ightdm|[m]ate-screensaver'
+```
+
+Verificar la configuración de LightDM:
+
+```bash
+sudo lightdm --show-config
+```
+
+Debe aparecer:
+
+```text
+greeter-wrapper=/usr/libexec/mate-screensaver-greeter-wrapper
+```
+
+Consultar el log de LightDM:
+
+```bash
+sudo journalctl -u lightdm -f
+```
+
+Comprobar el acceso X11 del usuario `lightdm`:
+
+```bash
+sudo -u lightdm env \
+    DISPLAY=:0 \
+    XAUTHORITY=/var/lib/lightdm/.Xauthority \
+    xdpyinfo | head
+```
+
+Comprobar el estado de DPMS:
+
+```bash
+sudo -u lightdm env \
+    DISPLAY=:0 \
+    XAUTHORITY=/var/lib/lightdm/.Xauthority \
+    xset q
+```
+
 ## 🧭 Estado del proyecto
 
 ### Implementado
@@ -502,6 +678,7 @@ Esto permite comprobar que el callback de renderizado está siendo ejecutado.
 - [ ] Configuración del usuario
 
 - [ ] Animaciones
+
 
 ### 🤝 Contribuciones
 
