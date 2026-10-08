@@ -22,6 +22,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/rdcarranza/mate-screensaver-go/internal/config"
 	"github.com/rdcarranza/mate-screensaver-go/internal/display"
 	"github.com/rdcarranza/mate-screensaver-go/internal/location"
 	"github.com/rdcarranza/mate-screensaver-go/internal/weather"
@@ -58,15 +59,48 @@ func main() {
 	var err error
 
 	/*
-		currentLocation, err = location.Now()
+		Prioridad para determinar la ubicación:
 
-		if err != nil {
-			fmt.Println("No se pudo obtener la ubicación:", err)
-		}
+		1. Coordenadas recibidas como argumento.
+		2. /etc/mate-screensaver-go.conf
+		3. Ubicación automática mediante location.Now().
 	*/
 
-	if len(os.Args) > 1 && strings.TrimSpace(os.Args[1]) != "" {
-		latitude, longitude, parseErr := parseCoordinates(os.Args[1])
+	var coordinates string
+
+	// Mantener compatibilidad con la ejecución mediante argumento:
+	//
+	// mate-screensaver-go "-27.8746117,-63.9869298"
+	if len(os.Args) > 1 {
+		coordinates = strings.TrimSpace(os.Args[1])
+	}
+
+	// Si no recibimos coordenadas por argumento, intentar cargar
+	// la configuración común.
+	if coordinates == "" {
+		cfg, configErr := config.LoadDefault()
+
+		if configErr != nil {
+			fmt.Println(
+				"Error leyendo configuración:",
+				configErr,
+			)
+
+			// La configuración es opcional.
+			// Continuamos con ubicación automática.
+		} else if cfg.Latitude != "" && cfg.Longitude != "" {
+			coordinates = cfg.Latitude + "," + cfg.Longitude
+
+			fmt.Printf(
+				"Coordenadas desde configuración: %s\n",
+				coordinates,
+			)
+		}
+	}
+
+	// Si tenemos coordenadas, intentamos utilizarlas.
+	if coordinates != "" {
+		latitude, longitude, parseErr := parseCoordinates(coordinates)
 
 		if parseErr == nil {
 			currentLocation, err = location.FromCoordinates(
@@ -79,15 +113,26 @@ func main() {
 					"Error obteniendo ubicación desde coordenadas:",
 					err,
 				)
-				return
-			}
 
-			fmt.Printf(
-				"Ubicación por coordenadas: %s, %s, %s\n",
-				currentLocation.City,
-				currentLocation.Region,
-				currentLocation.Country,
-			)
+				// No hacemos fallar el screensaver.
+				// Intentamos ubicación automática.
+				currentLocation, err = location.Now()
+
+				if err != nil {
+					fmt.Println(
+						"Error obteniendo ubicación automática:",
+						err,
+					)
+					return
+				}
+			} else {
+				fmt.Printf(
+					"Ubicación por coordenadas: %s, %s, %s\n",
+					currentLocation.City,
+					currentLocation.Region,
+					currentLocation.Country,
+				)
+			}
 		} else {
 			fmt.Printf(
 				"Coordenadas inválidas (%s), usando ubicación automática\n",
@@ -97,15 +142,27 @@ func main() {
 			currentLocation, err = location.Now()
 
 			if err != nil {
-				fmt.Println("Error obteniendo ubicación:", err)
+				fmt.Println(
+					"Error obteniendo ubicación:",
+					err,
+				)
 				return
 			}
 		}
 	} else {
+		// No hay coordenadas configuradas.
+		// Usamos la ubicación automática existente.
+		fmt.Println(
+			"No hay coordenadas configuradas, usando ubicación automática",
+		)
+
 		currentLocation, err = location.Now()
 
 		if err != nil {
-			fmt.Println("Error obteniendo ubicación:", err)
+			fmt.Println(
+				"Error obteniendo ubicación:",
+				err,
+			)
 			return
 		}
 	}
@@ -116,7 +173,10 @@ func main() {
 	)
 
 	if err != nil {
-		fmt.Println("No se pudo obtener el clima:", err)
+		fmt.Println(
+			"No se pudo obtener el clima:",
+			err,
+		)
 	}
 
 	C.screen_init()
@@ -151,10 +211,16 @@ func refreshWeather() {
 
 		dataMutex.RUnlock()
 
-		current, err := weather.Now(latitude, longitude)
+		current, err := weather.Now(
+			latitude,
+			longitude,
+		)
 
 		if err != nil {
-			fmt.Println("Error actualizando clima:", err)
+			fmt.Println(
+				"Error actualizando clima:",
+				err,
+			)
 			continue
 		}
 
@@ -183,6 +249,7 @@ func parseCoordinates(value string) (float64, float64, error) {
 		strings.TrimSpace(parts[0]),
 		64,
 	)
+
 	if err != nil {
 		return 0, 0, fmt.Errorf("latitud inválida")
 	}
@@ -191,16 +258,21 @@ func parseCoordinates(value string) (float64, float64, error) {
 		strings.TrimSpace(parts[1]),
 		64,
 	)
+
 	if err != nil {
 		return 0, 0, fmt.Errorf("longitud inválida")
 	}
 
 	if latitude < -90 || latitude > 90 {
-		return 0, 0, fmt.Errorf("latitud fuera de rango")
+		return 0, 0, fmt.Errorf(
+			"latitud fuera de rango",
+		)
 	}
 
 	if longitude < -180 || longitude > 180 {
-		return 0, 0, fmt.Errorf("longitud fuera de rango")
+		return 0, 0, fmt.Errorf(
+			"longitud fuera de rango",
+		)
 	}
 
 	return latitude, longitude, nil
