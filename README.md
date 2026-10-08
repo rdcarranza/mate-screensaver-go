@@ -47,7 +47,8 @@ La información meteorológica se obtiene mediante **Open-Meteo**, mientras que 
 
 ## 🖥️ Captura
 
-> Próximamente.
+<img width="1600" height="900" alt="remmina_rp5-s3_192 168 1 253_20261008-220708" src="https://github.com/user-attachments/assets/91ae823c-4fa3-4acf-91ad-e67323775b0c" />
+
 
 ---
 
