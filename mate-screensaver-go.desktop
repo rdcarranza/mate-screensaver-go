@@ -1,0 +1,12 @@
+[Desktop Entry]
+Name=MATE Screensaver Go
+Comment=Reloj, ubicación y clima
+Exec=/usr/libexec/mate-screensaver/mate-screensaver-go
+#Exec=/usr/libexec/mate-screensaver/mate-screensaver-go "xxxxx,yyyyy"
+TryExec=/usr/libexec/mate-screensaver/mate-screensaver-go
+StartupNotify=false
+Terminal=false
+Type=Application
+Categories=Screensaver;
+Keywords=MATE;screensaver;clock;weather;location;
+OnlyShowIn=MATE;
